@@ -1,0 +1,9 @@
+# Servidor do site estático no Railway (a porta vem da variável PORT)
+:{$PORT:8080}
+
+root * /srv
+encode zstd gzip
+file_server
+
+header /js/* Cache-Control "public, max-age=600"
+header /css/* Cache-Control "public, max-age=600"

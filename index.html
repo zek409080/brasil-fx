@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brasil FX</title>
+<meta name="description" content="Estúdio de efeitos visuais fictícios sobre um mapa 3D do Brasil. Experiência fictícia: não há cálculos reais de alcance ou danos.">
+<meta name="theme-color" content="#05090e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305090e'/%3E%3Ccircle cx='16' cy='17' r='7' fill='%23ffae42'/%3E%3Ccircle cx='16' cy='17' r='3.2' fill='%23fff3da'/%3E%3Cpath d='M16 3v5M16 26v3M4 17h4M24 17h4M7.5 8.5l3 3M21.5 22.5l2 2M24.5 8.5l-3 3' stroke='%23ffae42' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Instrument+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+
+<!-- three.js via CDN. O módulo abaixo expõe THREE como global para os scripts clássicos,
+     o que permite abrir o site direto pelo arquivo (file://) sem servidor local. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+  import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+  import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+  window.THREE = THREE;
+  window.THREE_ADDONS = { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, ShaderPass };
+</script>
+<script defer src="js/brasil-geo.js"></script>
+<script defer src="js/mundo-geo.js"></script>
+<script defer src="js/util.js"></script>
+<script defer src="js/audio.js"></script>
+<script defer src="js/textures.js"></script>
+<script defer src="js/particles.js"></script>
+<script defer src="js/parts.js"></script>
+<script defer src="js/map.js"></script>
+<script defer src="js/planet.js"></script>
+<script defer src="js/effects.js"></script>
+<script defer src="js/effects-extra.js"></script>
+<script defer src="js/effects-weather.js"></script>
+<script defer src="js/app.js"></script>
+</head>
+<body>
+<canvas id="stage" aria-label="Mapa 3D do Brasil. Arraste para girar, role ou use pinça para aproximar, clique ou toque para marcar um ponto."></canvas>
+
+<div class="letterbox letterbox--top" aria-hidden="true"></div>
+<div class="letterbox letterbox--bottom" aria-hidden="true"></div>
+
+<div class="viewfinder" aria-hidden="true">
+  <span class="vf-corner vf-tl"></span><span class="vf-corner vf-tr"></span>
+  <span class="vf-corner vf-bl"></span><span class="vf-corner vf-br"></span>
+</div>
+
+<div class="hud" id="hud">
+  <header class="slate">
+    <div class="brand" aria-label="Brasil FX">Brasil<b>FX</b></div>
+    <p class="tagline">Estúdio de efeitos visuais sobre o mapa do Brasil</p>
+    <span class="badge-fiction" role="note">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/></svg>
+      Experiência fictícia
+    </span>
+  </header>
+
+  <div class="takebar" aria-live="off">
+    <span class="rec" id="recDot" aria-hidden="true"></span>
+    <span class="mono" id="takeLabel">Tomada 00</span>
+    <span class="mono tc" id="timecode">00:00:00</span>
+  </div>
+
+  <aside class="rack glass" id="rack" aria-label="Painel da simulação">
+    <button class="rack-handle" id="rackHandle" type="button" aria-expanded="true" aria-controls="rackBody">
+      <span class="rack-handle-bar" aria-hidden="true"></span>
+      <span class="sr-only">Mostrar ou ocultar o painel</span>
+    </button>
+    <div class="rack-body" id="rackBody">
+      <section class="step" aria-labelledby="step1Title">
+        <header class="step-head">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h2 id="step1Title">Local da cena</h2>
+        </header>
+        <div class="point-row">
+          <div class="point-info" id="pointInfo" aria-live="polite">
+            <span class="point-name">Nenhum ponto</span>
+            <span class="point-coords mono">Clique no mapa</span>
+          </div>
+          <button class="btn btn-ghost" id="btnRandom" type="button" title="Marcar um ponto aleatório">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6C14.3 16 15.5 17 17.5 17H21"/><path d="M18 4l3 3-3 3"/><path d="M3 17h3.5c1.4 0 2.4-.5 3.2-1.3M14.3 8.3c.8-.8 1.8-1.3 3.2-1.3H21"/><path d="M18 14l3 3-3 3"/></svg>
+            <span>Aleatório</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="step" aria-labelledby="step2Title">
+        <header class="step-head">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h2 id="step2Title">Efeito visual</h2>
+        </header>
+        <div class="fx-list" id="fxList" role="radiogroup" aria-labelledby="step2Title">
+          <span class="fx-indicator" id="fxIndicator" aria-hidden="true"></span>
+          <!-- cartões gerados por app.js a partir de BFX.EFFECTS -->
+        </div>
+        <div class="fx-tools">
+          <button class="btn btn-ghost btn-small" id="btnCreate" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Criar meu efeito</span>
+          </button>
+          <label class="switch switch--inline switch--small" for="optMissile">
+            <input type="checkbox" id="optMissile">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span class="switch-text"><span>Chegar como míssil</span></span>
+          </label>
+          <button class="btn btn-ghost btn-small" id="btnEdit" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>
+            <span>Editar</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="step step--action" aria-label="Iniciar">
+        <button class="btn btn-primary" id="btnStart" type="button" disabled>
+          <span class="btn-primary-label">Iniciar simulação</span>
+          <kbd class="mono">Enter</kbd>
+        </button>
+        <p class="fine">Ficção visual. Cores, tamanhos e sons são artísticos, sem cálculo real de alcance ou danos.</p>
+      </section>
+    </div>
+  </aside>
+
+  <nav class="transport glass" aria-label="Controles da simulação">
+    <div class="transport-buttons">
+      <button class="icon-btn" id="btnPause" type="button" disabled aria-label="Pausar" title="Pausar (Espaço)">
+        <svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>
+        <svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.6.6 0 0 0 .9.5l10.6-6.8a.6.6 0 0 0 0-1L8.9 4.7a.6.6 0 0 0-.9.5z"/></svg>
+      </button>
+      <button class="icon-btn" id="btnRepeat" type="button" disabled aria-label="Repetir" title="Repetir (R)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.8-6.3"/><path d="M3.5 3.8v5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="btnClear" type="button" disabled aria-label="Limpar" title="Limpar (Backspace)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.9 12.2a1 1 0 0 0 1 .8h7.2a1 1 0 0 0 1-.8L17.5 7M9.5 7V4.5h5V7"/></svg>
+      </button>
+      <button class="icon-btn icon-btn--reset" id="btnResetMap" type="button" aria-label="Resetar mapa" title="Resetar mapa: apaga crateras, montanhas e fendas (T)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19.5h18M5 19.5l4.5-7 3 4 2.5-3.5 4 6.5"/><path d="M17 3.5a3.5 3.5 0 1 1-3.2 2.1"/><path d="M13.6 3.2v2.6h2.6"/></svg>
+      </button>
+    </div>
+    <div class="timeline" aria-hidden="true">
+      <div class="timeline-track"><div class="timeline-fill" id="timelineFill"></div></div>
+      <span class="mono timeline-label" id="timelineLabel">Pronto</span>
+    </div>
+    <div class="transport-audio">
+      <button class="icon-btn" id="btnMute" type="button" aria-label="Silenciar" aria-pressed="false" title="Silenciar (M)">
+        <svg class="ico-vol" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.6L12.5 19V5L7.6 9.5z"/><path d="M16 9a4.2 4.2 0 0 1 0 6"/><path d="M18.6 6.4a8 8 0 0 1 0 11.2"/></svg>
+        <svg class="ico-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.6L12.5 19V5L7.6 9.5z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>
+      </button>
+      <label class="sr-only" for="volume">Volume</label>
+      <input class="range" id="volume" type="range" min="0" max="100" step="1" value="75">
+      <button class="icon-btn" id="btnSettings" type="button" aria-label="Ajustes" aria-expanded="false" aria-controls="settings" title="Ajustes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <div class="settings glass" id="settings" hidden>
+    <h2 class="settings-title">Ajustes</h2>
+    <label class="switch" for="optReduced">
+      <input type="checkbox" id="optReduced">
+      <span class="switch-ui" aria-hidden="true"></span>
+      <span class="switch-text">
+        <span>Reduzir efeitos visuais</span>
+        <small>Menos partículas e sem clarões fortes ou tremores</small>
+      </span>
+    </label>
+    <label class="switch" for="optCinematic">
+      <input type="checkbox" id="optCinematic" checked>
+      <span class="switch-ui" aria-hidden="true"></span>
+      <span class="switch-text">
+        <span>Câmera cinematográfica</span>
+        <small>Aproxima e gira devagar durante a tomada</small>
+      </span>
+    </label>
+    <label class="switch" for="optCrater">
+      <input type="checkbox" id="optCrater" checked>
+      <span class="switch-ui" aria-hidden="true"></span>
+      <span class="switch-text">
+        <span>Cratera em blocos</span>
+        <small>O chão vira blocos que voam e afundam. Ficam salvas: exploda de novo no mesmo lugar para cavar mais. Profundidade só visual</small>
+      </span>
+    </label>
+    <div class="slider-row settings-light">
+      <label for="optLight">Intensidade da luz</label>
+      <input class="range" id="optLight" type="range" min="50" max="250" step="5" value="130">
+      <output id="optLightOut" for="optLight">130%</output>
+    </div>
+    <button class="btn-ghost settings-reset" id="btnResetCraters" type="button">Restaurar terreno (apagar crateras salvas)</button>
+    <p class="settings-keys mono">Espaço pausa · R repete · Backspace limpa o ponto · T reseta o mapa · M silencia · 1–9 efeitos · G globo</p>
+  </div>
+
+  <div class="editor" id="editor" hidden>
+    <div class="editor-card glass" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+      <header class="editor-head">
+        <h2 id="editorTitle">Criar meu efeito</h2>
+        <button class="icon-btn" id="edClose" type="button" aria-label="Fechar editor">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="editor-body">
+        <label class="field" for="edName"><span class="mono">Nome</span>
+          <input id="edName" type="text" maxlength="24" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="field-colors">
+          <label class="color" for="edCore"><input id="edCore" type="color"><span>Núcleo</span></label>
+          <label class="color" for="edMid"><input id="edMid" type="color"><span>Chamas</span></label>
+          <label class="color" for="edSmoke"><input id="edSmoke" type="color"><span>Fumaça</span></label>
+        </div>
+        <div class="sliders" id="edSliders"><!-- gerado por app.js --></div>
+        <fieldset class="field-sound">
+          <legend class="mono">Som</legend>
+          <label><input type="radio" name="edSound" value="estrondo"><span>Estrondo</span></label>
+          <label><input type="radio" name="edSound" value="eletrico"><span>Elétrico</span></label>
+          <label><input type="radio" name="edSound" value="suave"><span>Grave suave</span></label>
+          <label><input type="radio" name="edSound" value="nenhum"><span>Sem som</span></label>
+        </fieldset>
+        <p class="fine">Tudo é artístico: os controles mudam só a aparência, não representam nenhuma força real.</p>
+      </div>
+      <footer class="editor-foot">
+        <button class="btn btn-ghost" id="edDelete" type="button" hidden>Apagar</button>
+        <button class="btn btn-ghost" id="edTest" type="button">Testar no ponto</button>
+        <button class="btn btn-primary btn-save" id="edSave" type="button"><span class="btn-primary-label">Salvar</span></button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="viewswitch glass" role="group" aria-label="Visualização">
+    <button type="button" id="viewMap" aria-pressed="true">Mapa 3D</button>
+    <button type="button" id="viewGlobe" aria-pressed="false">Globo</button>
+  </div>
+
+  <p class="fiction-strip" role="note">Experiência fictícia · apenas efeitos visuais · sem cálculos reais de alcance ou danos</p>
+
+  <div class="tooltip mono" id="tooltip" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<div class="countdown" id="countdown" hidden aria-live="assertive">
+  <div class="leader">
+    <div class="leader-sweep" id="leaderSweep"></div>
+    <span class="leader-cross" aria-hidden="true"></span>
+    <span class="leader-num" id="leaderNum">3</span>
+  </div>
+  <p class="leader-note mono">Simulação fictícia · efeitos visuais</p>
+</div>
+
+<div class="paused-tag mono" id="pausedTag" hidden>Pausado</div>
+
+<div class="intro" id="intro" hidden>
+  <div class="intro-card glass" role="dialog" aria-modal="true" aria-labelledby="introTitle" aria-describedby="introText">
+    <p class="intro-eyebrow mono">Brasil FX · Estúdio de efeitos</p>
+    <h1 id="introTitle">Bem-vindo ao set</h1>
+    <p id="introText">Escolha um ponto no mapa 3D do Brasil ou em qualquer lugar do globo, escolha um efeito e rode uma tomada cinematográfica, com contagem regressiva e som.</p>
+    <div class="intro-fiction">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/></svg>
+      <p><strong>Tudo aqui é fictício.</strong> Tamanhos, cores e sons são escolhas artísticas. O site não calcula alcance, energia ou danos de nada real.</p>
+    </div>
+    <ul class="intro-hints">
+      <li><span class="mono">Arrastar</span> gira o mapa</li>
+      <li><span class="mono">Rolar / pinça</span> aproxima</li>
+      <li><span class="mono">Clique / toque</span> marca o ponto</li>
+    </ul>
+    <p class="intro-warn">A animação tem clarões, tremores de câmera e sons altos.</p>
+    <label class="switch switch--inline" for="introReduced">
+      <input type="checkbox" id="introReduced">
+      <span class="switch-ui" aria-hidden="true"></span>
+      <span class="switch-text"><span>Começar com efeitos reduzidos</span></span>
+    </label>
+    <button class="btn btn-primary btn-wide" id="btnEnter" type="button">
+      <span class="btn-primary-label">Entrar no set</span>
+    </button>
+  </div>
+</div>
+
+<div class="loading" id="loading">
+  <div class="loading-inner">
+    <div class="loading-reel" aria-hidden="true"></div>
+    <p class="mono" id="loadingText">Montando o set…</p>
+  </div>
+</div>
+
+<noscript><p class="noscript">Este site precisa de JavaScript e WebGL para exibir o mapa 3D.</p></noscript>
+</body>
+</html>
