@@ -102,6 +102,10 @@ O mapa do Brasil e o planeta têm crateras separadas. Tudo continua **só visual
 
 "Repetir" reproduz a mesma tomada quadro a quadro (mesma semente aleatória). "Nova simulação" gera uma variação.
 
+## Publicação (Railway)
+
+O site está no ar em https://site-production-1c98.up.railway.app, servido pelo Railway a partir deste repositório (https://github.com/zek409080/brasil-fx). O `Dockerfile` usa o servidor Caddy (`Caddyfile`) para entregar os arquivos estáticos com compressão. Cada `git push` na branch `main` publica uma nova versão automaticamente.
+
 ## Estrutura
 
 ```
